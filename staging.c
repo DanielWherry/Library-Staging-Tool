@@ -8,13 +8,19 @@
 typedef enum {
 	root,
 	notRoot
-	} rootOrNot;
+	} RootOrNot;
+typedef struct {
+	int* subCommArray;
+	int sizeOfSubComm;
+	char* buf;
+	int libraryFileSize;
+	} FileAndMPI;
 	
-void setSubCommArray(int* subCommArray, int sizeOfSubComm, int rank); 	
+void setSubCommArray(FileAndMPI* info, int rank); 	
 
 int main(int argc, char** argv, char** envp){
 
-	int rank, numProc, i, sizeOfSubComm = 10;
+	int rank, numProc, i;
 	int numNodes = atoi(getenv("PBS_NUM_NODES"));	
 	
 	MPI_Init(&argc, &argv);
@@ -41,15 +47,16 @@ int main(int argc, char** argv, char** envp){
 		}
 	}	
 	
-	rootOrNot isRoot = notRoot;
+	RootOrNot isRoot = notRoot;
+	FileAndMPI info;
 
-	char* buf;
-	int* subCommArray = (int*) malloc(sizeof(int) * sizeOfSubComm);
-	
-	setSubCommArray(subCommArray, sizeOfSubComm, rank); 	
+	info.sizeOfSubComm = 10;
+	info.subCommArray = (int*) malloc(sizeof(int) * info.sizeOfSubComm);
+		
+	setSubCommArray(&info, rank); 	
 
 	MPI_Comm_group(MPI_COMM_WORLD, &worldGroup);
-	MPI_Group_incl(worldGroup, sizeOfSubComm, subCommArray, &subGroup);
+	MPI_Group_incl(worldGroup, info.sizeOfSubComm, info.subCommArray, &subGroup);
 	MPI_Comm_create(MPI_COMM_WORLD, subGroup, &subComm);
 	if(subComm == MPI_COMM_NULL){
 		printf("Ya done messed up\n");
@@ -60,8 +67,6 @@ int main(int argc, char** argv, char** envp){
 		isRoot = root;
 	}
 	
-
-	int libraryFileSize;
 	if(isRoot == root){
 		FILE* libraryFile = fopen(filename, "r");
 		if(libraryFile == NULL){
@@ -69,27 +74,27 @@ int main(int argc, char** argv, char** envp){
 		}
 		
 		fseek(libraryFile, 0, SEEK_END);
-		libraryFileSize = ftell(libraryFile);
+		info.libraryFileSize = ftell(libraryFile);
 		rewind(libraryFile);
 	
-		buf = (char*) malloc(libraryFileSize);
+		info.buf = (char*) malloc(info.libraryFileSize);
 		
-		for(i = 0; i < libraryFileSize; i++){
-			buf[i] = i;
+		for(i = 0; i < info.libraryFileSize; i++){
+			info.buf[i] = i;
 		}
 
-		fread(buf, sizeof(char), libraryFileSize, libraryFile);
+		fread(info.buf, sizeof(char), info.libraryFileSize, libraryFile);
 
 		fclose(libraryFile);
 	}
 
-	MPI_Bcast(&libraryFileSize, 1, MPI_INT, 0, subComm);
+	MPI_Bcast(&(info.libraryFileSize), 1, MPI_INT, 0, subComm);
 
 	if(isRoot == notRoot){
-		buf = (char*) malloc(libraryFileSize);
+		info.buf = (char*) malloc(info.libraryFileSize);
 	}
 	
-	MPI_Bcast(buf, libraryFileSize, MPI_CHAR, 0, subComm);
+	MPI_Bcast(info.buf, info.libraryFileSize, MPI_CHAR, 0, subComm);
 
 
 	char ramDiskDirectory[100] = "/tmp/scratch/";
@@ -98,13 +103,13 @@ int main(int argc, char** argv, char** envp){
 		printf("RAMDISK file pointer is NULL, see errno: %d\n", errno);
 	}
 	
-	fwrite(buf, sizeof(char), libraryFileSize, ramDisk);
+	fwrite(info.buf, sizeof(char), info.libraryFileSize, ramDisk);
 	
 	fclose(ramDisk);
 	ramDisk = NULL; 
 
-	free(buf);
-	free(subCommArray);
+	free(info.buf);
+	free(info.subCommArray);
 	MPI_Finalize();
 	
 	return 0;
@@ -112,12 +117,12 @@ int main(int argc, char** argv, char** envp){
 
 }
 
-void setSubCommArray(int* subCommArray, int sizeOfSubComm, int rank){
+void setSubCommArray(FileAndMPI* info, int rank){
 	int i;
-	int groupID = rank / sizeOfSubComm;
-	int rootOfGroup = sizeOfSubComm * groupID;
-	for(i = 0; i < sizeOfSubComm; i++){
-		subCommArray[i] = rootOfGroup + i;
+	int groupID = rank / info->sizeOfSubComm;
+	int rootOfGroup = info->sizeOfSubComm * groupID;
+	for(i = 0; i < info->sizeOfSubComm; i++){
+		info->subCommArray[i] = rootOfGroup + i;
 	}
 }
 

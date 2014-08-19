@@ -13,6 +13,6 @@ Tool to stage dynamic libraries to every node in a job
 In Submit Script:
  * Before running the program that needs the library, load the libstage module in your bash commands section using "module load libstage"
  * On the following line, enter the command as follows "libstage -f/--filename  /path/to/library"
- * Once your job begins, it will load the requested library onto every node that you requested
+ * Once your job begins, it will load the denoted library onto every node that you requested
 
 
